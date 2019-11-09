@@ -7,7 +7,7 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-
+#include "llvm/IR/DerivedTypes.h"
 // to load file with branch info give command line arg with name (might need multiple for different loops, so json file?)
 // https://stackoverflow.com/questions/13626993/is-it-possible-to-add-arguments-for-user-defined-passes-in-llvm
 
@@ -48,8 +48,17 @@ namespace {
     }
 
     // return a trace with signature
-    Function *getTraceFunction() {
+    Function *createTraceFunction() {
       auto& context = _theModule->getContext();
+
+      // TODO this should happen somewhere else, or should happen at the beginning so not repeated
+      // add a ret statement at the end of the basic block to signal the end of the trace
+      IRBuilder<> builder(_body);
+      builder.CreateRetVoid();
+
+      for (auto& I : *_body) {
+        errs() << "Instruction " << I << "\n";
+      }
 
       // https://gist.github.com/JacquesLucke/1bddc9aa24fe684d1b19d4bf51a5eb47
       // Make the function signature:  double(double,double) etc.
@@ -59,16 +68,17 @@ namespace {
       // <ret types>, <arg types> 
       FunctionType *FT = FunctionType::get(Type::getVoidTy(context), sigArgs, false);
 
-      Function *F = Function::Create(FT, Function::ExternalLinkage, _traceName, _theModule);
-      
-      // add a ret statement at the end of the basic block to signal the end of the trace
-      IRBuilder<> builder(_body);
-      builder.CreateRetVoid();
+      // insert function into module with no callback (nullptr at the end)
+      FunctionCallee *c = _theModule->getOrInsertFunction(_traceName, FT);
+      Function *F = cast<Function>(c);
 
       // insert the block into the function
       _body->insertInto(F);
 
-      return F;
+      // this doesn't work
+      //Function *F = Function::Create(FT, Function::ExternalLinkage, _traceName, _theModule);
+
+      return F;   
     }
   };
 
@@ -80,20 +90,34 @@ namespace {
     virtual bool runOnFunction(Function &F) {
 
       // cheat in branch vector (TODO from file)
-      bool *pathArray = new bool[1];
+      bool *pathArray = new bool[ 1 ] { 0 };
 
       // the current trace in llvm instructions (treat as a single basic block)
+      Trace trace;
+      trace.initTrace("trace", F.getParent());
 
+      // TODO just do on known function
+      if (F.getName() != "test") return false;
 
-      errs() << "I saw a function called " << F.getName() << "!\n";
-      for (auto &B : F) {
-        for (auto &I : B) {
-          /*if (auto *op = dyn_cast<BinaryOperator>(&I)) {
-            errs() << "I saw an op called " << op->getName() << "!\n";
-          }*/
-          errs() << "Instruction " << I.getOpcodeName() << "\n";
-        }
+      // get the first block of the function
+      auto &bb = F.getEntryBlock();
+
+      // run through instructions along the path
+      for (auto &I : bb) {
+        errs() << "Instruction " << I.getOpcodeName() << "\n";
+
+        // add a copy of the instruction to the current trace
+        trace.append(I.clone());
       }
+
+      // get the traced function
+      auto traceF = trace.createTraceFunction();
+
+      /*for (auto &B : *traceF) {
+        for (auto &I : B) {
+          errs() << "Instruction " << I << "\n";
+        }
+      }*/
 
       delete[] pathArray;
 
