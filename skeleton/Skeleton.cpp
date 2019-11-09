@@ -35,6 +35,15 @@ namespace {
       _traceName = traceName;
       _theModule = theModule;
 
+      // create basic block with nothing in it yet
+      Function *F = nullptr;
+      _body = BasicBlock::Create(_theModule->getContext(), "entry", F);
+
+    }
+
+    // return a trace with signature
+    Function *getTraceFunction() {
+      // https://gist.github.com/JacquesLucke/1bddc9aa24fe684d1b19d4bf51a5eb47
       // Make the function signature:  double(double,double) etc.
       int numArgs = 4;
       std::vector<Type*> Doubles(numArgs, Type::getDoubleTy(_theModule->getContext()));
@@ -42,38 +51,7 @@ namespace {
 
       Function *F = Function::Create(FT, Function::ExternalLinkage, _traceName, _theModule);
 
-                                     /*
-      BasicBlock *NewBB = BasicBlock::Create(BB->getContext(), "", F);
-      if (BB->hasName())
-     NewBB->setName(BB->getName() + NameSuffix);
- 
-   bool hasCalls = false, hasDynamicAllocas = false, hasStaticAllocas = false;
-   Module *TheModule = F ? F->getParent() : nullptr;
- 
-   // Loop over all instructions, and copy them over.
-   for (const Instruction &I : *BB) {
-     if (DIFinder && TheModule)
-       DIFinder->processInstruction(*TheModule, I);
- 
-     Instruction *NewInst = I.clone();
-     if (I.hasName())
-       NewInst->setName(I.getName() + NameSuffix);
-     NewBB->getInstList().push_back(NewInst);
-     VMap[&I] = NewInst; // Add instruction map to value.
- 
-     hasCalls |= (isa<CallInst>(I) && !isa<DbgInfoIntrinsic>(I));
-     if (const AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
-       if (isa<ConstantInt>(AI->getArraySize()))
-         hasStaticAllocas = true;
-       else
-         hasDynamicAllocas = true;
-     }
-     */
-    }
-
-    // return a trace with signature
-    Function *getTraceFunction() {
-      return nullptr;
+      return F;
     }
   };
 
