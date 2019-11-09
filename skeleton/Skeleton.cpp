@@ -36,20 +36,37 @@ namespace {
       _theModule = theModule;
 
       // create basic block with nothing in it yet
-      Function *F = nullptr;
+      Function *F = nullptr; // put into a function later
       _body = BasicBlock::Create(_theModule->getContext(), "entry", F);
 
     }
 
+    void append(Instruction *tracedInst) {
+      // TODO if the instruction is a branch, need to replace with something else?
+
+      _body->getInstList().push_back(tracedInst);
+    }
+
     // return a trace with signature
     Function *getTraceFunction() {
+      auto& context = _theModule->getContext();
+
       // https://gist.github.com/JacquesLucke/1bddc9aa24fe684d1b19d4bf51a5eb47
       // Make the function signature:  double(double,double) etc.
-      int numArgs = 4;
-      std::vector<Type*> Doubles(numArgs, Type::getDoubleTy(_theModule->getContext()));
-      FunctionType *FT = FunctionType::get(Type::getDoubleTy(_theModule->getContext()), Doubles, false);
+      std::vector<Type*> sigArgs;
+      sigArgs.push_back(Type::getInt32Ty(context));
+      sigArgs.push_back(Type::getInt32Ty(context));
+      // <ret types>, <arg types> 
+      FunctionType *FT = FunctionType::get(Type::getVoidTy(context), sigArgs, false);
 
       Function *F = Function::Create(FT, Function::ExternalLinkage, _traceName, _theModule);
+      
+      // add a ret statement at the end of the basic block to signal the end of the trace
+      IRBuilder<> builder(_body);
+      builder.CreateRetVoid();
+
+      // insert the block into the function
+      _body->insertInto(F);
 
       return F;
     }
@@ -74,7 +91,7 @@ namespace {
           /*if (auto *op = dyn_cast<BinaryOperator>(&I)) {
             errs() << "I saw an op called " << op->getName() << "!\n";
           }*/
-          errs() << "Instruction " << I.getOpcodeName();
+          errs() << "Instruction " << I.getOpcodeName() << "\n";
         }
       }
 
