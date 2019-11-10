@@ -80,8 +80,8 @@ namespace {
             if (branchInst->isConditional()) {
               // take a branch direction if conditional
               errs() << "found conditional " << *I << "\n";
-              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
-              BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+              BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(2));
+              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(1));
 
               bool tracedOutcome = pathArray[brIdx];
               // continue tracing on the path that was taken and delete the other
