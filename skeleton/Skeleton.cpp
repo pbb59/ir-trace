@@ -7,7 +7,9 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/IR/DerivedTypes.h"
+
+#include "llvm/Transforms/Utils/ValueMapper.h"
+
 // to load file with branch info give command line arg with name (might need multiple for different loops, so json file?)
 // https://stackoverflow.com/questions/13626993/is-it-possible-to-add-arguments-for-user-defined-passes-in-llvm
 
@@ -29,6 +31,9 @@ namespace {
     // Store the name of the trace to generate function name with
     std::string _traceName;
 
+    // looks at prev instruction to know refs of current instruction
+    ValueToValueMapTy _vmap;
+
     // we need to create a function with a single basic block in it
     // making sure to maintain any global variables and stuff
     void initTrace(std::string traceName, Module *theModule) {
@@ -46,6 +51,91 @@ namespace {
 
       _body->getInstList().push_back(tracedInst);
     }
+
+    BasicBlock *getTracedBlock() {
+      return _body;
+    }
+
+    void generate(BasicBlock *traceBB, BasicBlock *curBB, bool *pathArray, int brIdx) {
+      // get pointers to each instrcution, so when delete in curBB the iteration isn't messed up...
+      std::vector<Instruction*> instPtrs;
+      for (auto& I : *curBB) {
+        instPtrs.push_back(&I);
+      }
+
+      for (int i = 0; i < instPtrs.size(); i++) {
+        Instruction *I = instPtrs[i];
+        // if branch then go to next basic block and delete this one
+        
+        if (I == nullptr) continue;
+        errs() << *I << "\n";
+
+        BranchInst *branchInst = dyn_cast<BranchInst>(I);
+        if (branchInst != nullptr && branchInst->isConditional()) {
+          // take a branch direction if conditional
+          //if (branchInst->isConditional()) {
+            errs() << "found conditional " << *I << "\n";
+            BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
+            BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+            
+            // remove the branch from this first block
+            // important to do this BEFORE remove the blocks, b/c will try to update refs?
+            if (traceBB == curBB) {
+              errs() << "erase " << *branchInst << "\n";
+              branchInst->eraseFromParent();
+              //errs() << *curBB << "\n";
+            }
+
+            bool tracedOutcome = pathArray[brIdx];
+            // continue tracing on the path that was taken
+            if (tracedOutcome) {
+              errs() << "erase not taken\n";
+              nt->eraseFromParent();
+              generate(traceBB, t, pathArray, brIdx + 1);
+            }
+            else {
+              errs() << "erase taken\n";
+              t->eraseFromParent();
+              generate(traceBB, nt, pathArray, brIdx + 1);
+            }
+
+            if (curBB != traceBB) {
+              curBB->eraseFromParent();
+            }
+            /*// remove the branch from this first block
+            else {
+              errs() << "erase " << *branchInst << "\n";
+              branchInst->eraseFromParent();
+              //errs() << *curBB << "\n";
+            }*/
+
+          //}
+        }
+        // normal tracing on blocks other than the entry
+        else {
+          
+          if (curBB != traceBB) {
+            I->eraseFromParent(); // shouldn't modify while iterating!!!
+            traceBB->getInstList().push_back(I);
+          }
+          //I.eraseFromParent();
+          //traceBB->getInstList().push_back(&I);
+          //Instruction *copiedInst = I.clone();
+
+          // need to restich instructions together (otherwise get badref)
+          //_vmap[&I] = copiedInst;
+          //RemapInstruction(copiedInst, _vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+
+          //errs() << *copiedInst << "\n";
+          // TODO should do vmap stuff here?
+          //append(&I);
+        }
+        errs() << "complete inst" << "\n";
+      }
+      errs() << "complete block\n";
+      //errs() << *curBB << "\n";
+    }
+
 
     // return a trace with signature
     Function *createTraceFunction() {
@@ -69,18 +159,20 @@ namespace {
       FunctionType *FT = FunctionType::get(Type::getVoidTy(context), sigArgs, false);
 
       // insert function into module with no callback (nullptr at the end)
-      FunctionCallee *c = _theModule->getOrInsertFunction(_traceName, FT);
-      Function *F = cast<Function>(c);
+      //Constant *c = _theModule->getOrInsertFunction(_traceName, FT);
+      //Function *F = cast<Function>(c);
+
+      Function *F = Function::Create(FT, Function::ExternalLinkage, _traceName, _theModule);
 
       // insert the block into the function
       _body->insertInto(F);
 
-      // this doesn't work
-      //Function *F = Function::Create(FT, Function::ExternalLinkage, _traceName, _theModule);
+
 
       return F;   
     }
   };
+
 
   // TODO potentially want a LoopPass b/c want to trace across within a loop nest and not outside
   struct SkeletonPass : public FunctionPass {
@@ -90,7 +182,7 @@ namespace {
     virtual bool runOnFunction(Function &F) {
 
       // cheat in branch vector (TODO from file)
-      bool *pathArray = new bool[ 1 ] { 0 };
+      bool *pathArray = new bool[ 10 ] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
       // the current trace in llvm instructions (treat as a single basic block)
       Trace trace;
@@ -102,16 +194,51 @@ namespace {
       // get the first block of the function
       auto &bb = F.getEntryBlock();
 
-      // run through instructions along the path
-      for (auto &I : bb) {
-        errs() << "Instruction " << I.getOpcodeName() << "\n";
+      // roll through basic blocks adding all instruction to original basic block, when finish a basic block call eraseFromParent() to delete
+      // at the end do a dead code elimination to get rid of basic blocks that weren't taken
+      trace.generate(&bb, &bb, pathArray, 0);
 
+      errs() << "finish gen\n";     
+
+      //verifyFunction(F, &outs());
+
+      // put the generated block into the function
+      //BasicBlock *tracedBlk = trace.getTracedBlock();
+      //errs() << "trace\n" << tracedBlk << "\nendtrace\n";
+      //tracedBlk->insertInto(&F);
+
+
+      // collect instructions on the path (need full vmap before creating new instructions)
+      
+
+      // This works as long as remove the original use of those registers
+      // Remap instruction on the path and place into trace
+      // https://stackoverflow.com/questions/43303943/in-llvm-ir-i-want-to-copy-a-set-of-instructions-and-paste-those-instructions-to
+      /*ValueToValueMapTy vmap; // looks at prev instruction to know refs of current instruction
+      BasicBlock *newBB = BasicBlock::Create(F.getParent()->getContext(), "entry", nullptr); 
+      vmap[&bb] = newBB;
+      for (auto &I : bb) {
+        errs() << "Original: " << I << "\n";
         // add a copy of the instruction to the current trace
-        trace.append(I.clone());
-      }
+        Instruction *newInst = I.clone();
+        newBB->getInstList().push_back(newInst);
+        vmap[&I] = newInst;
+        RemapInstruction(newInst, vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+
+        errs() << "Copy: " << *newInst << "\n";
+
+        // the 'name' is the SSA dest reg (needs to be unique)
+        //if (I.hasName())
+        //  newInst->setName(I.getName() + "__t");
+        //trace.append(newInst);
+      }*/
+
+       errs() << F << "\n";
+
+      // need to delete this block (or really the entire function// ?)
 
       // get the traced function
-      auto traceF = trace.createTraceFunction();
+      //auto traceF = trace.createTraceFunction();
 
       /*for (auto &B : *traceF) {
         for (auto &I : B) {
@@ -122,7 +249,7 @@ namespace {
       delete[] pathArray;
 
       // whether code was modified or not
-      return false;
+      return true;
     }
   };
 }
