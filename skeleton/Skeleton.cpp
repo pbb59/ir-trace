@@ -127,7 +127,26 @@ namespace {
           }
           // remove phi nodes and update refs
           else if (PHINode *phiInst = dyn_cast<PHINode>(I)) {
+            // get refs from phi node, only take the ref that is in the current basic block
+            // if multiple in current basic block take the most recently assigned
+            unsigned numOps = phiInst->getNumOperands();
+            Value *lastDef = nullptr;
+            for (int j = 0; j < instPtrs.size(); j++) {
+              for (int k = 0; k < numOps; k++) {
+                Value* depInst = phiInst->getOperand(k);
+                if (depInst == cast<Value>(instPtrs[j])) {
+                  lastDef = depInst;
+                }
+              }
+            }
 
+            // update everyone who uses this instruction
+            for (auto& U : phiInst->uses()) {
+              User* user = U.getUser();
+              if (cast<User>(phiInst) == user) continue; // don't try to mod self b/c going to delete
+              user->setOperand(U.getOperandNo(), lastDef);
+            }
+            phiInst->eraseFromParent();
           }
 
         }
