@@ -8,7 +8,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
-#include "llvm/Transforms/Utils/ValueMapper.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 // to load file with branch info give command line arg with name (might need multiple for different loops, so json file?)
 // https://stackoverflow.com/questions/13626993/is-it-possible-to-add-arguments-for-user-defined-passes-in-llvm
@@ -67,46 +67,69 @@ namespace {
         // get pointers to each instrcution, so when delete in curBB the iteration isn't messed up...
         std::vector<Instruction*> instPtrs = getInstPtrsInBlk(curBB);
 
-        // get the last instruction (only one that can be a branch)
-        Instruction *I = instPtrs[instPtrs.size() - 1];
+        // loop through all instructions (could prob make this more efficient by remembering we're we left off)
+        for (int i = 0; i < instPtrs.size(); i++) {
 
-        // check if branch (if return then we should finish the algorithm... for now)
-        BranchInst *branchInst = dyn_cast<BranchInst>(I);
-        if (branchInst != nullptr) {
-          if (branchInst->isConditional()) {
-            // take a branch direction if conditional
-            errs() << "found conditional " << *I << "\n";
-            BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
-            BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+          // get the current instruction that we're looking at
+          Instruction *I = instPtrs[i];
 
-            bool tracedOutcome = pathArray[brIdx];
-            // continue tracing on the path that was taken and delete the other
-            if (tracedOutcome) {
-              errs() << "erase not taken\n";
-              nt->eraseFromParent();
+          // check if branch (if return then we should finish the algorithm... for now)
+          //BranchInst *branchInst = dyn_cast<BranchInst>(I);
+          //if (branchInst != nullptr) {
+          if (BranchInst *branchInst = dyn_cast<BranchInst>(I)) {
+            if (branchInst->isConditional()) {
+              // take a branch direction if conditional
+              errs() << "found conditional " << *I << "\n";
+              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
+              BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+
+              bool tracedOutcome = pathArray[brIdx];
+              // continue tracing on the path that was taken and delete the other
+              if (tracedOutcome) {
+                errs() << "erase not taken\n";
+                nt->eraseFromParent();
+                mergeBlks(curBB, t);
+              }
+              else {
+                errs() << "erase taken\n";
+                t->eraseFromParent(); 
+                mergeBlks(curBB, nt);
+              }
+            }
+            // unconditional, note can't jump outside of function, so not really inlining
+            // TODO what if multiple basic blocks go to this label... don't want to fully delete?
+            // BUT is this a problem if it's a single forward path?
+            else {
+              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(0));
               mergeBlks(curBB, t);
             }
-            else {
-              errs() << "erase taken\n";
-              t->eraseFromParent(); 
-              mergeBlks(curBB, nt);
+
+            // remove the branch from the end of the block
+            branchInst->eraseFromParent();
+
+            // if this was a branch then still more work to do
+            done = false;
+            brIdx++;
+          }
+          // inline function calls along the path
+          else if (CallInst *callInst = dyn_cast<CallInst>(I)) {
+            // only inline if it's an llvm intrinsic (inserted when you inline the original function, so ignore)
+            // I think the lifetime.start and lifetime.end are used for other passes and should be deleted??
+            Function *fun = callInst->getCalledFunction();
+            if (fun->getName().str().compare(0, 5, "llvm.", 0, 5) == 0) {
+              continue;
             }
+
+            InlineFunctionInfo ifi;
+            InlineFunction(callInst, ifi);
+            done = false;
           }
-          // unconditional, note can't jump outside of function, so not really inlining
-          // TODO what if multiple basic blocks go to this label... don't want to fully delete?
-          else {
-            BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(0));
-            mergeBlks(curBB, t);
+          // remove phi nodes and update refs
+          else if (PHINode *phiInst = dyn_cast<PHINode>(I)) {
+
           }
 
-          // remove the branch from the end of the block
-          branchInst->eraseFromParent();
-
-          // if this was a branch then still more work to do
-          done = false;
-          brIdx++;
         }
-      
       } while (!done);
     } 
   };
