@@ -86,6 +86,10 @@ namespace {
               //errs() << *curBB << "\n";
             }
 
+            // go in first basic block
+            // delete not taken, pull all instructions into trace block, set dirty
+            // if dirty repeat
+
             bool tracedOutcome = pathArray[brIdx];
             // continue tracing on the path that was taken
             if (tracedOutcome) {
@@ -100,6 +104,7 @@ namespace {
             }
 
             if (curBB != traceBB) {
+              errs() << "erase self\n";
               curBB->eraseFromParent();
             }
             /*// remove the branch from this first block
@@ -115,8 +120,11 @@ namespace {
         else {
           
           if (curBB != traceBB) {
-            I->eraseFromParent(); // shouldn't modify while iterating!!!
+            errs() << *I << " 1\n";
+            I->removeFromParent(); // shouldn't modify while iterating!!!
+            errs() << *I << " 2\n";
             traceBB->getInstList().push_back(I);
+            errs() << *I << " 3\n";
           }
           //I.eraseFromParent();
           //traceBB->getInstList().push_back(&I);
