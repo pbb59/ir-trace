@@ -114,7 +114,8 @@ namespace {
           // inline function calls along the path
           else if (CallInst *callInst = dyn_cast<CallInst>(I)) {
             // only inline if it's an llvm intrinsic (inserted when you inline the original function, so ignore)
-            // I think the lifetime.start and lifetime.end are used for other passes and should be deleted??
+            // These intrinsics are deleted when compile to machine code (not real function calls)
+            // verified with objdump -dC
             Function *fun = callInst->getCalledFunction();
             if (fun->getName().str().compare(0, 5, "llvm.", 0, 5) == 0) {
               continue;
