@@ -31,8 +31,11 @@ namespace {
     // Store the name of the trace to generate function name with
     std::string _traceName;
 
-    // looks at prev instruction to know refs of current instruction
-    //ValueToValueMapTy _vmap;
+    // we need to generate a fallback routine to call when fails
+    // TODO don't know how to do this without making it a branch instruction
+    void initTrace() {
+
+    }
 
     // list of instructions, safe to delete in the current block
     std::vector<Instruction*> getInstPtrsInBlk(BasicBlock *blk) {
@@ -67,29 +70,37 @@ namespace {
         // get the last instruction (only one that can be a branch)
         Instruction *I = instPtrs[instPtrs.size() - 1];
 
-        // check if conditional branch
+        // check if branch (if return then we should finish the algorithm... for now)
         BranchInst *branchInst = dyn_cast<BranchInst>(I);
-        if (branchInst != nullptr && branchInst->isConditional()) {
-          // take a branch direction if conditional
-          errs() << "found conditional " << *I << "\n";
-          BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
-          BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+        if (branchInst != nullptr) {
+          if (branchInst->isConditional()) {
+            // take a branch direction if conditional
+            errs() << "found conditional " << *I << "\n";
+            BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
+            BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+
+            bool tracedOutcome = pathArray[brIdx];
+            // continue tracing on the path that was taken and delete the other
+            if (tracedOutcome) {
+              errs() << "erase not taken\n";
+              nt->eraseFromParent();
+              mergeBlks(curBB, t);
+            }
+            else {
+              errs() << "erase taken\n";
+              t->eraseFromParent(); 
+              mergeBlks(curBB, nt);
+            }
+          }
+          // unconditional, note can't jump outside of function, so not really inlining
+          // TODO what if multiple basic blocks go to this label... don't want to fully delete?
+          else {
+            BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(0));
+            mergeBlks(curBB, t);
+          }
 
           // remove the branch from the end of the block
           branchInst->eraseFromParent();
-
-          bool tracedOutcome = pathArray[brIdx];
-          // continue tracing on the path that was taken and delete the other
-          if (tracedOutcome) {
-            errs() << "erase not taken\n";
-            nt->eraseFromParent();
-            mergeBlks(curBB, t);
-          }
-          else {
-            errs() << "erase taken\n";
-            t->eraseFromParent(); 
-            mergeBlks(curBB, nt);
-          }
 
           // if this was a branch then still more work to do
           done = false;
@@ -125,6 +136,8 @@ namespace {
 
       // generate a trace starting from a basic block
       trace.generate(&bb, branchOutcomes);
+
+      errs() << F << "\n";
 
       // whether code was modified or not
       return true;
