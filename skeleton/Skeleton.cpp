@@ -56,94 +56,128 @@ namespace {
       return _body;
     }
 
-    void generate(BasicBlock *traceBB, BasicBlock *curBB, bool *pathArray, int brIdx) {
-      // get pointers to each instrcution, so when delete in curBB the iteration isn't messed up...
+    // list of instructions, safe to delete in the current block
+    std::vector<Instruction*> getInstPtrsInBlk(BasicBlock *blk) {
       std::vector<Instruction*> instPtrs;
-      for (auto& I : *curBB) {
-        instPtrs.push_back(&I);
+      for (auto& I : *blk) {
+          instPtrs.push_back(&I);
       }
-
-      for (int i = 0; i < instPtrs.size(); i++) {
-        Instruction *I = instPtrs[i];
-        // if branch then go to next basic block and delete this one
-        
-        if (I == nullptr) continue;
-        errs() << *I << "\n";
-
-        BranchInst *branchInst = dyn_cast<BranchInst>(I);
-        if (branchInst != nullptr && branchInst->isConditional()) {
-          // take a branch direction if conditional
-          //if (branchInst->isConditional()) {
-            errs() << "found conditional " << *I << "\n";
-            BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
-            BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
-            
-            // remove the branch from this first block
-            // important to do this BEFORE remove the blocks, b/c will try to update refs?
-            if (traceBB == curBB) {
-              errs() << "erase " << *branchInst << "\n";
-              branchInst->eraseFromParent();
-              //errs() << *curBB << "\n";
-            }
-
-            // go in first basic block
-            // delete not taken, pull all instructions into trace block, set dirty
-            // if dirty repeat
-
-            bool tracedOutcome = pathArray[brIdx];
-            // continue tracing on the path that was taken
-            if (tracedOutcome) {
-              errs() << "erase not taken\n";
-              nt->eraseFromParent();
-              generate(traceBB, t, pathArray, brIdx + 1);
-            }
-            else {
-              errs() << "erase taken\n";
-              t->eraseFromParent();
-              generate(traceBB, nt, pathArray, brIdx + 1);
-            }
-
-            if (curBB != traceBB) {
-              errs() << "erase self\n";
-              curBB->eraseFromParent();
-            }
-            /*// remove the branch from this first block
-            else {
-              errs() << "erase " << *branchInst << "\n";
-              branchInst->eraseFromParent();
-              //errs() << *curBB << "\n";
-            }*/
-
-          //}
-        }
-        // normal tracing on blocks other than the entry
-        else {
-          
-          if (curBB != traceBB) {
-            errs() << *I << " 1\n";
-            I->removeFromParent(); // shouldn't modify while iterating!!!
-            errs() << *I << " 2\n";
-            traceBB->getInstList().push_back(I);
-            errs() << *I << " 3\n";
-          }
-          //I.eraseFromParent();
-          //traceBB->getInstList().push_back(&I);
-          //Instruction *copiedInst = I.clone();
-
-          // need to restich instructions together (otherwise get badref)
-          //_vmap[&I] = copiedInst;
-          //RemapInstruction(copiedInst, _vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
-
-          //errs() << *copiedInst << "\n";
-          // TODO should do vmap stuff here?
-          //append(&I);
-        }
-        errs() << "complete inst" << "\n";
-      }
-      errs() << "complete block\n";
-      //errs() << *curBB << "\n";
+      return instPtrs;
     }
 
+    void mergeBlks(BasicBlock *traceBB, BasicBlock *otherBB) {
+      auto instPtrs = getInstPtrsInBlk(otherBB);
+      for (int i = 0; i < instPtrs.size(); i++) {
+        Instruction *movedInst = instPtrs[i];
+        movedInst->removeFromParent();
+        traceBB->getInstList().push_back(movedInst);
+      }
+      otherBB->eraseFromParent();
+    }
+
+    void generate(BasicBlock *curBB, bool *pathArray, int brIdx) {
+      bool done;
+
+      do {
+        // set done flag
+        done = true;
+
+        // get pointers to each instrcution, so when delete in curBB the iteration isn't messed up...
+        std::vector<Instruction*> instPtrs = getInstPtrsInBlk(curBB);
+
+        for (int i = 0; i < instPtrs.size(); i++) {
+          Instruction *I = instPtrs[i];
+          // if branch then go to next basic block and delete this one
+          
+          if (I == nullptr) continue;
+          errs() << *I << "\n";
+
+          BranchInst *branchInst = dyn_cast<BranchInst>(I);
+          if (branchInst != nullptr && branchInst->isConditional()) {
+            // take a branch direction if conditional
+            //if (branchInst->isConditional()) {
+              errs() << "found conditional " << *I << "\n";
+              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
+              BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
+              
+              // remove the branch from this first block
+              // important to do this BEFORE remove the blocks, b/c will try to update refs?
+              /*if (traceBB == curBB) {
+                errs() << "erase " << *branchInst << "\n";
+                branchInst->eraseFromParent();
+                //errs() << *curBB << "\n";
+              }*/
+
+              // remove the branch from the end of the block
+              branchInst->eraseFromParent();
+
+              // go in first basic block
+              // delete not taken, pull all instructions into trace block, set dirty
+              // if dirty repeat
+
+              bool tracedOutcome = pathArray[brIdx];
+              // continue tracing on the path that was taken
+              if (tracedOutcome) {
+                errs() << "erase not taken\n";
+                nt->eraseFromParent();
+                // add all instructions from the taken block and repeat
+                mergeBlks(curBB, t);
+                
+
+                //generate(traceBB, t, pathArray, brIdx + 1);
+              }
+              else {
+                errs() << "erase taken\n";
+                t->eraseFromParent();
+                
+                mergeBlks(curBB, nt);
+                //generate(traceBB, nt, pathArray, brIdx + 1);
+              }
+
+              // if this was a branch then still more work to do
+              done = false;
+
+              /*if (curBB != traceBB) {
+                errs() << "erase self\n";
+                curBB->eraseFromParent();
+              }*/
+              /*// remove the branch from this first block
+              else {
+                errs() << "erase " << *branchInst << "\n";
+                branchInst->eraseFromParent();
+                //errs() << *curBB << "\n";
+              }*/
+
+            //}
+          }
+          // normal tracing on blocks other than the entry
+          /*else {
+            
+            if (curBB != traceBB) {
+              errs() << *I << " 1\n";
+              I->removeFromParent(); // shouldn't modify while iterating!!!
+              errs() << *I << " 2\n";
+              traceBB->getInstList().push_back(I);
+              errs() << *I << " 3\n";
+            }
+            //I.eraseFromParent();
+            //traceBB->getInstList().push_back(&I);
+            //Instruction *copiedInst = I.clone();
+
+            // need to restich instructions together (otherwise get badref)
+            //_vmap[&I] = copiedInst;
+            //RemapInstruction(copiedInst, _vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+
+            //errs() << *copiedInst << "\n";
+            // TODO should do vmap stuff here?
+            //append(&I);
+          }*/
+          //errs() << "complete inst" << "\n";
+        }
+        errs() << "complete block\n";
+        //errs() << *curBB << "\n";
+      } while (!done);
+    } 
 
     // return a trace with signature
     Function *createTraceFunction() {
@@ -204,7 +238,7 @@ namespace {
 
       // roll through basic blocks adding all instruction to original basic block, when finish a basic block call eraseFromParent() to delete
       // at the end do a dead code elimination to get rid of basic blocks that weren't taken
-      trace.generate(&bb, &bb, pathArray, 0);
+      trace.generate(&bb, pathArray, 0);
 
       errs() << "finish gen\n";     
 
