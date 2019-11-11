@@ -1,0 +1,6 @@
+In embench-io
+
+need src files and then support/main.c support/support.h support/beebsc.*
+
+Verified by return code 0
+use echo $? to get the last return code from executable
