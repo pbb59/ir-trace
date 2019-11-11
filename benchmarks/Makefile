@@ -24,7 +24,7 @@ C_FLAGS = -O3 $(COMMON_FLAGS)
 COPT_FLAGS = $(COMMON_FLAGS)
 LINKER_FLAGS = -lm
 
-default: build
+default: build-opt
 
 emit-llvm: $(LLN_DEPS)
 	
