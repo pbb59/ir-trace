@@ -15,4 +15,5 @@ Build:
 Run:
 
     $ clang -S -emit-llvm foo.c
-    $ opt -load build/skeleton/libSkeletonPass.* -skeleton -S foo.ll
+    $ opt -load build/skeleton/libSkeletonPass.* -skeleton -S foo.ll % to generate trace
+    $ opt -load build/skeleton/libSkeletonPass.* -skull -S foo.ll % to select trace 
