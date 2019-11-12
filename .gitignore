@@ -1,1 +1,7 @@
 build
+*.ll
+*.o
+*.lln
+*.llo
+*.out
+embench-iot/
