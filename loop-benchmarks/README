@@ -1,0 +1,6 @@
+Extracted loop bodies from embench-iot benchmark suite. We also apply a unrolling pass in case sizes are known.
+
+Because we need to generate and run traces (to test for correctness) we can only run a single
+loop iteration in a function. We don't have a interpreter runtime so we can't swap between traces
+as different loop conditions are encountered. There's no way we can run a loop to completion, 
+let alone an entire program.
