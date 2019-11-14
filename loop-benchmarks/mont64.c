@@ -54,12 +54,12 @@ value.
 does not find u and v st. u*a - v*b = 1, but rather u*(2a) - v*b = 1. */
 
 void
-xbinGCD (uint64 a, uint64 b, volatile uint64 * pu, volatile uint64 * pv)
+xbinGCD (uint64_t u, uint64_t v, uint64 a, uint64 b, volatile uint64 * pu, volatile uint64 * pv)
 {
-  uint64 alpha, beta, u, v;
+  uint64 alpha, beta; //, u, v;
 
-  u = 1;
-  v = 0;
+  //u = 1;
+  //v = 0;
   alpha = a;
   beta = b;			// Note that alpha is
   // even and beta is odd.
@@ -134,6 +134,6 @@ int main() {
   result of MM back to a normal number. The other calculated number,
   mprime, is used in the MM algorithm. */
 
-  xbinGCD (hr, m, &rinv, &mprime);	// xbinGCD, in effect, doubles hr.
+  xbinGCD (1, 0, hr, m, &rinv, &mprime);	// xbinGCD, in effect, doubles hr.
   printf("%lu %lu\n", rinv, mprime);
 }
