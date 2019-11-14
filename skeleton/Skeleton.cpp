@@ -65,7 +65,7 @@ namespace {
       do {
         // set done flag
         done = true;
-
+        
         // get pointers to each instrcution, so when delete in curBB the iteration isn't messed up...
         std::vector<Instruction*> instPtrs = getInstPtrsInBlk(curBB);
 
@@ -120,7 +120,8 @@ namespace {
             // These intrinsics are deleted when compile to machine code (not real function calls)
             // verified with objdump -dC
             Function *fun = callInst->getCalledFunction();
-            if (fun->getName().str().compare(0, 5, "llvm.", 0, 5) == 0) {
+            //if (fun->getName().str().compare(0, 5, "llvm.", 0, 5) == 0) {
+            if (fun->isDeclaration()) {
               continue;
             }
 
@@ -133,6 +134,7 @@ namespace {
           }
           // remove phi nodes and update refs
           else if (PHINode *phiInst = dyn_cast<PHINode>(I)) {
+            errs() << "phi " << *I << "\n";
             // get refs from phi node, only take the ref that is in the current basic block
             // if multiple in current basic block take the most recently assigned
             unsigned numOps = phiInst->getNumOperands();
@@ -202,15 +204,17 @@ namespace {
       char buffer[100];
       FILE *fp;
       fp = fopen("trace.txt", "r");
-      if (fgets(buffer, sizeof(buffer), fp)) {
-        char *token = strtok(buffer, ",");
-        while (token != NULL) {
-          bool branch = (bool)atoi(token);
-          branchOutcomes.push_back(branch);
-          token = strtok(0, ",");
+      if (fp) {
+        if (fgets(buffer, sizeof(buffer), fp)) {
+          char *token = strtok(buffer, ",");
+          while (token != NULL) {
+            bool branch = (bool)atoi(token);
+            branchOutcomes.push_back(branch);
+            token = strtok(0, ",");
+          }
         }
+        fclose(fp);
       }
-      fclose(fp);
       
       // the current trace in llvm instructions (treat as a single basic block)
       Trace trace;
