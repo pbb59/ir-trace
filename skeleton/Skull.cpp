@@ -18,7 +18,7 @@ namespace {
     SkullPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      errs() << "I saw a function called " << F.getName() << "!\n";
+      //errs() << "I saw a function called " << F.getName() << "!\n";
       
       // Get the function to call from our runtime library.
       LLVMContext &Ctx = F.getContext();
@@ -29,19 +29,19 @@ namespace {
       Value* logFunc = funccallee.getCallee();
 
       for (auto &B : F) {
-          errs() << "Inside a Block! \n";
+          //errs() << "Inside a Block! \n";
           for (auto &I : B) {
-              errs() << "Instruction! " << I << " \n";
+              //errs() << "Instruction! " << I << " \n";
               BranchInst *bin = dyn_cast<BranchInst>(&I);
               if (bin) {
-                  errs() << "and it's a branch instruction! \n";
+                  //errs() << "and it's a branch instruction! \n";
                   bool branch = bin->isConditional();
-                  errs() << branch << "\n";
+                  //errs() << branch << "\n";
                   if (branch) {
                       Value *condition = bin->getCondition();
-                      errs() << *condition << "\n";
+                      //errs() << *condition << "\n";
                       Type *cond_type = condition->getType();
-                      errs() << *cond_type << "\n";
+                      //errs() << *cond_type << "\n";
 
                       // Cast to instruction
                       if (isa<Instruction>(condition)){
