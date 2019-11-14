@@ -81,20 +81,20 @@ namespace {
           if (BranchInst *branchInst = dyn_cast<BranchInst>(I)) {
             if (branchInst->isConditional()) {
               // take a branch direction if conditional
-              errs() << "found conditional " << *I << "\n";
+              //errs() << "found conditional " << *I << "\n";
               BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(2));
               BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(1));
 
               bool tracedOutcome = pathArray[brIdx];
               // continue tracing on the path that was taken and delete the other
               if (tracedOutcome) {
-                errs() << "erase not taken\n";
-                nt->eraseFromParent();
+                //errs() << "erase not taken\n";
+                //nt->eraseFromParent();
                 mergeBlks(curBB, t);
               }
               else {
-                errs() << "erase taken\n";
-                t->eraseFromParent(); 
+                //errs() << "erase taken\n";
+                //t->eraseFromParent(); 
                 mergeBlks(curBB, nt);
               }
             }
@@ -126,6 +126,9 @@ namespace {
             InlineFunctionInfo ifi;
             InlineFunction(callInst, ifi);
             done = false;
+            // need to break here b/c potentially more instructions to handle afterwards
+            break; 
+
           }
           // remove phi nodes and update refs
           else if (PHINode *phiInst = dyn_cast<PHINode>(I)) {
@@ -154,8 +157,33 @@ namespace {
         }
       } while (!done);
     } 
-  };
 
+    // we needed to keep every not taken block in case was needed later
+    // now that the full path has been generated delete blocks with no predessors
+    void elimStranded(Function &F) {
+      // get list of bbs because we're going to delete
+      // everytime we delete one, we need to check again b/c maybe a successor also free now
+      bool moreToElim;
+      do {
+        moreToElim = false;
+
+        std::vector<BasicBlock*> bbs;
+        for (auto &B : F) {
+          bbs.push_back(&B);
+        }
+
+        for (int i = 0; i < bbs.size(); i++) {
+          BasicBlock *bb = bbs[i];
+          if (bb->hasNPredecessors(0) && (&F.getEntryBlock() != bb)) {
+            //errs() << "elimate blk\n" << "\n"; 
+            bb->eraseFromParent();
+            moreToElim = true;
+          }
+        }
+      } while(moreToElim);
+    }
+
+  };
 
   // TODO potentially want a LoopPass b/c want to trace across within a loop nest and not outside
   struct SkeletonPass : public FunctionPass {
@@ -163,9 +191,9 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
-      
+
       // TODO just do on known function
-      if (F.getName() == "main" || F.getName() == "print_path") return false;
+      if (F.getName() == "main" || F.getName() == "print_path" || F.getName() == "minver_fabs") return false;
 
       // load profile info
       std::vector<bool> branchOutcomes;
@@ -174,7 +202,6 @@ namespace {
       FILE *fp;
       fp = fopen("trace.txt", "r");
       if (fgets(buffer, sizeof(buffer), fp)) {
-        errs() << "in\n";
         char *token = strtok(buffer, ",");
         while (token != NULL) {
           bool branch = (bool)atoi(token);
@@ -193,7 +220,8 @@ namespace {
       // generate a trace starting from a basic block
       trace.generate(&bb, branchOutcomes);
 
-      //errs() << F << "\n";
+      // delete any blocks that aren't being pointed to
+      trace.elimStranded(F);
 
       // whether code was modified or not
       return true;
