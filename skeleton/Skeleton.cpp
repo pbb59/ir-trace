@@ -163,6 +163,9 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
+      
+      // TODO just do on known function
+      if (F.getName() == "main" || F.getName() == "print_path") return false;
 
       // load profile info
       std::vector<bool> branchOutcomes;
@@ -183,9 +186,6 @@ namespace {
       
       // the current trace in llvm instructions (treat as a single basic block)
       Trace trace;
-
-      // TODO just do on known function
-      if (F.getName() == "main" || F.getName() == "print_path") return false;
 
       // get the first block of the function
       auto &bb = F.getEntryBlock();
