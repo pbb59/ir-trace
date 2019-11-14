@@ -10,6 +10,8 @@
 
 #include "llvm/Transforms/Utils/Cloning.h"
 
+#include <stdio.h>
+
 // to load file with branch info give command line arg with name (might need multiple for different loops, so json file?)
 // https://stackoverflow.com/questions/13626993/is-it-possible-to-add-arguments-for-user-defined-passes-in-llvm
 
@@ -162,17 +164,28 @@ namespace {
 
     virtual bool runOnFunction(Function &F) {
 
-      // cheat in branch vector (TODO from file)
+      // load profile info
       std::vector<bool> branchOutcomes;
-      for (int i = 0; i < 10; i++) {
-        branchOutcomes.push_back(0);
-      }
 
+      char buffer[100];
+      FILE *fp;
+      fp = fopen("trace.txt", "r");
+      if (fgets(buffer, sizeof(buffer), fp)) {
+        errs() << "in\n";
+        char *token = strtok(buffer, ",");
+        while (token != NULL) {
+          bool branch = (bool)atoi(token);
+          branchOutcomes.push_back(branch);
+          token = strtok(0, ",");
+        }
+      }
+      fclose(fp);
+      
       // the current trace in llvm instructions (treat as a single basic block)
       Trace trace;
 
       // TODO just do on known function
-      if (F.getName() != "test") return false;
+      if (F.getName() == "main" || F.getName() == "print_path") return false;
 
       // get the first block of the function
       auto &bb = F.getEntryBlock();
@@ -180,7 +193,7 @@ namespace {
       // generate a trace starting from a basic block
       trace.generate(&bb, branchOutcomes);
 
-      errs() << F << "\n";
+      //errs() << F << "\n";
 
       // whether code was modified or not
       return true;

@@ -1,14 +1,17 @@
 EXEC ?= nbody
+OT ?= 0
 TOP_BUILD=./build
 BUILD_DIR=$(TOP_BUILD)/$(EXEC)
 EMBENCH_PATH=../embench-iot
+PASS_LIB=../build/skeleton/libSkeletonPass.*
 
 # FIND EMBENCH DIRECTORIES WITH SRC
 #EMBENCH_SRC=$(EMBENCH_PATH)/src/$(EXEC)
 EMBENCH_SRC=.
 
+
 #C_SRCS = $(wildcard *.c) $(wildcard $(EMBENCH_SRC)/*.c)
-C_SRCS=$(EXEC).c
+C_SRCS=$(EXEC).c ../rtlib.c
 
 C_SRCS_NAMES = $(foreach x, $(C_SRCS), $(notdir $x))
 # OPTIMIZED LLVM IR
@@ -40,7 +43,12 @@ OPT=opt-9
 
 COMMON_FLAGS= -DCPU_MHZ=1000 -DWARMUP_HEAT=0
 LLN_FLAGS= -S -emit-llvm -Xclang -disable-O0-optnone $(COMMON_FLAGS)
-OPT_FLAGS= -S -O3
+COMMON_OPT =
+ifeq ($(OT),0)
+	OPT_FLAGS= -S $(COMMON_OPT) -load $(PASS_LIB) -skull
+else
+	OPT_FLAGS= -S $(COMMON_OPT) -load $(PASS_LIB) -skeleton
+endif
 C_FLAGS = -O3 $(COMMON_FLAGS)
 COPT_FLAGS = $(COMMON_FLAGS)
 LINKER_FLAGS = -lm
