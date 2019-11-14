@@ -43,11 +43,11 @@ OPT=opt-9
 
 COMMON_FLAGS= -DCPU_MHZ=1000 -DWARMUP_HEAT=0
 LLN_FLAGS= -S -emit-llvm -Xclang -disable-O0-optnone $(COMMON_FLAGS)
-COMMON_OPT =
+COMMON_OPT =--dce
 ifeq ($(OT),0)
-	OPT_FLAGS= -S $(COMMON_OPT) -load $(PASS_LIB) -skull
+	OPT_FLAGS= -S -load $(PASS_LIB) -skull $(COMMON_OPT)
 else
-	OPT_FLAGS= -S $(COMMON_OPT) -load $(PASS_LIB) -skeleton
+	OPT_FLAGS= -S -load $(PASS_LIB) -skeleton $(COMMON_OPT)
 endif
 C_FLAGS = -O3 $(COMMON_FLAGS)
 COPT_FLAGS = $(COMMON_FLAGS)
