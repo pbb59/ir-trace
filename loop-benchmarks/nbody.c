@@ -134,8 +134,11 @@ bodies_energy (struct body *bodies, unsigned int nbodies)
     j = i + 1;
     //for (j = i + 1; j < nbodies; ++j)
 	  //{
-      for (k = 0; k < 3; ++k)
-        dx[k] = bodies[i].x[k] - bodies[j].x[k];
+      //for (k = 0; k < 3; ++k)
+      //  dx[k] = bodies[i].x[k] - bodies[j].x[k];
+      dx[0] = bodies[i].x[0] - bodies[j].x[0];
+      dx[1] = bodies[i].x[1] - bodies[j].x[1];
+      dx[2] = bodies[i].x[2] - bodies[j].x[2];
 
       distance = sqrt (dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2]);
       e -= (bodies[i].mass * bodies[j].mass) / distance;
