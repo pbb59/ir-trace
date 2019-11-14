@@ -81,9 +81,8 @@ namespace {
           if (BranchInst *branchInst = dyn_cast<BranchInst>(I)) {
             if (branchInst->isConditional()) {
               // take a branch direction if conditional
-              //errs() << "found conditional " << *I << "\n";
-              BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(2));
-              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(1));
+              BasicBlock* t  = cast<BasicBlock>(branchInst->getOperand(2));
+              BasicBlock* nt = cast<BasicBlock>(branchInst->getOperand(1));
 
               bool tracedOutcome = pathArray[brIdx];
               // continue tracing on the path that was taken and delete the other
@@ -97,6 +96,8 @@ namespace {
                 //t->eraseFromParent(); 
                 mergeBlks(curBB, nt);
               }
+
+              brIdx++;
             }
             // unconditional, note can't jump outside of function, so not really inlining
             // TODO what if multiple basic blocks go to this label... don't want to fully delete?
@@ -111,7 +112,7 @@ namespace {
 
             // if this was a branch then still more work to do
             done = false;
-            brIdx++;
+            
           }
           // inline function calls along the path
           else if (CallInst *callInst = dyn_cast<CallInst>(I)) {
